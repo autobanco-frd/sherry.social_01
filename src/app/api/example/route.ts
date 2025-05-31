@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
     const metadata: Metadata = {
       url: "https://sherry.social ",
-      icon: "☕",
+      icon: "https://avatars.githubusercontent.com/u/174357246",
       title: "Send Me Coffee ☕",
       baseUrl: serverUrl,
       description: "Haz click para enviar 0.01 AVAX como café",
