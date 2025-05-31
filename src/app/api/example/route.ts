@@ -6,7 +6,10 @@ import {
   ValidatedMetadata,
   ExecutionResponse,
 } from "@sherrylinks/sdk";
-import { serialize } from "wagmi";
+import { serializeTransaction } from "viem";
+
+// Dirección del contrato desplegado
+const COFFEE_TIP_CONTRACT = "0xaf6771D04668b053013E491CC70F13f1adb7A41B" as `0x${string}`;
 
 export async function GET(req: NextRequest) {
   try {
@@ -15,110 +18,106 @@ export async function GET(req: NextRequest) {
     const serverUrl = `${protocol}://${host}`;
 
     const metadata: Metadata = {
-      url: "https://sherry.social",
-      icon: "https://avatars.githubusercontent.com/u/117962315",
-      title: "Mensaje con Timestamp",
+      url: "https://sherry.social ",
+      icon: "☕",
+      title: "Send Me Coffee ☕",
       baseUrl: serverUrl,
-      description:
-        "Almacena un mensaje con un timestamp optimizado calculado por nuestro algoritmo",
+      description: "Haz click para enviar 0.01 AVAX como café",
       actions: [
         {
           type: "dynamic",
-          label: "Almacenar Mensaje",
-          description:
-            "Almacena tu mensaje con un timestamp personalizado calculado para almacenamiento óptimo",
+          label: "Enviar Café ☕",
           chains: { source: "fuji" },
-          path: `/api/example`,
+          path: "/api/example",
           params: [
             {
-              name: "mensaje",
-              label: "¡Tu Mensaje Hermano!",
-              type: "text",
+              name: "amount",
+              label: "Elige cantidad",
+              type: "radio",
               required: true,
-              description:
-                "Ingresa el mensaje que quieres almacenar en la blockchain",
+              options: [
+                { label: "Pequeño ☕", value: 0.01, description: "0.01 AVAX" },
+                { label: "Mediano 🧋", value: 0.05, description: "0.05 AVAX" },
+                { label: "Grande 🍵", value: 0.1, description: "0.1 AVAX" },
+              ],
             },
           ],
         },
       ],
     };
 
-    // Validar metadata usando el SDK
     const validated: ValidatedMetadata = createMetadata(metadata);
 
-    // Retornar con headers CORS para acceso cross-origin
     return NextResponse.json(validated, {
       headers: {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
       },
     });
   } catch (error) {
     console.error("Error creando metadata:", error);
+    return NextResponse.json({ error: "Error al crear metadata" }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const amountStr = searchParams.get("amount");
+
+    if (!amountStr) {
+      return NextResponse.json(
+        { error: "El parámetro 'amount' es requerido" },
+        {
+          status: 400,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          },
+        }
+      );
+    }
+
+    const amount = parseFloat(amountStr);
+
+    // Crear transacción para enviar AVAX al contrato
+    const tx = {
+      to: COFFEE_TIP_CONTRACT,
+      value: BigInt(Math.floor(amount * 1e18)), // Convertir a wei
+      chainId: avalancheFuji.id,
+    };
+
+    const serialized = serializeTransaction(tx);
+
+    const response: ExecutionResponse = {
+      serializedTransaction: serialized,
+     chainId: avalancheFuji.id.toString(), // ✅ Ahora es un string
+      };
+
+    return NextResponse.json(response, {
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
+    });
+  } catch (error) {
+    console.error("Error procesando la solicitud:", error);
     return NextResponse.json(
-      { error: "Error al crear metadata" },
+      { error: "Error al procesar el mensaje" },
       { status: 500 }
     );
   }
 }
 
-export async function POST(req: NextRequest) {
-    try {
-      const { searchParams } = new URL(req.url);
-      const mensaje = searchParams.get('mensaje');
-  
-      if (!mensaje) {
-        return NextResponse.json(
-          { error: 'El parámetro mensaje es requerido' },
-          {
-            status: 400,
-            headers: {
-              'Access-Control-Allow-Origin': '*',
-              'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-              'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-            },
-          },
-        );
-      }
-  
-      const tx = {
-        to: '0x5ee75a1B1648C023e885E58bD3735Ae273f2cc52',
-        value: BigInt(1000000),
-        chainId: avalancheFuji.id,
-      };
-  
-      // Serializar la transacción para la blockchain
-      const serialized = serialize(tx);
-  
-      // Crear el objeto de respuesta que Sherry espera
-      const resp: ExecutionResponse = {
-        serializedTransaction: serialized,
-        chainId: avalancheFuji.name, // Usar el nombre de la chain, no el ID
-      };
-  
-      // Retornar la respuesta con headers CORS
-      return NextResponse.json(resp, {
-        status: 200,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        },
-      });
-    } catch (error) {
-      console.error('Error en petición POST:', error);
-      return NextResponse.json({ error: 'Error Interno del Servidor' }, { status: 500 });
-    }
-  }
-
-  export async function OPTIONS(request: NextRequest) {
-    return new NextResponse(null, {
-      status: 204, // Sin Contenido
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers':
-          'Content-Type, Authorization, X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Date, X-Api-Version',
-      },
-    });
-  }
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
+}
